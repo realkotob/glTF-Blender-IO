@@ -272,6 +272,8 @@ class GlTF2Exporter:
                 #         self.__append_unique_and_get_index(self.__gltf.extensions_used, extension_name)
                 #         self.__append_unique_and_get_index(self.__gltf.extensions_required, extension_name)
             return node
+        
+        print("Traversing node with name " + node.name)
 
         # traverse nodes of a child of root property type and add them to the glTF root
         if type(node) in self.__childOfRootPropertyTypeLookup:
