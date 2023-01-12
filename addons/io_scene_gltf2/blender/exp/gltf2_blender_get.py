@@ -15,9 +15,10 @@
 import bpy
 from mathutils import Vector, Matrix
 
-from ..com.gltf2_blender_material_helpers import get_gltf_node_name
+from ..com.gltf2_blender_material_helpers import get_gltf_node_name, get_gltf_node_old_name
 from ...blender.com.gltf2_blender_conversion import texture_transform_blender_to_gltf
 from io_scene_gltf2.io.com import gltf2_io_debug
+from io_scene_gltf2.blender.exp import gltf2_blender_search_node_tree
 
 
 def get_animation_target(action_group: bpy.types.ActionGroup):
@@ -43,7 +44,22 @@ def get_object_from_datapath(blender_object, data_path: str):
     return prop
 
 
-def get_socket(blender_material: bpy.types.Material, name: str):
+def get_node_socket(blender_material, type, name):
+    """
+    For a given material input name, retrieve the corresponding node tree socket for a given node type.
+
+    :param blender_material: a blender material for which to get the socket
+    :return: a blender NodeSocket for a given type
+    """
+    nodes = [n for n in blender_material.node_tree.nodes if isinstance(n, type) and not n.mute]
+    nodes = [node for node in nodes if check_if_is_linked_to_active_output(node.outputs[0])]
+    inputs = sum([[input for input in node.inputs if input.name == name] for node in nodes], [])
+    if inputs:
+        return inputs[0]
+    return None
+
+
+def get_socket(blender_material: bpy.types.Material, name: str, volume=False):
     """
     For a given material input name, retrieve the corresponding node tree socket.
 
@@ -57,26 +73,26 @@ def get_socket(blender_material: bpy.types.Material, name: str):
         if name == "Emissive":
             # Check for a dedicated Emission node first, it must supersede the newer built-in one
             # because the newer one is always present in all Principled BSDF materials.
-            type = bpy.types.ShaderNodeEmission
-            name = "Color"
-            nodes = [n for n in blender_material.node_tree.nodes if isinstance(n, type) and not n.mute]
-            nodes = [node for node in nodes if check_if_is_linked_to_active_output(node.outputs[0])]
-            inputs = sum([[input for input in node.inputs if input.name == name] for node in nodes], [])
-            if inputs:
-                return inputs[0]
+            emissive_socket = get_node_socket(blender_material, bpy.types.ShaderNodeEmission, "Color")
+            if emissive_socket:
+                return emissive_socket
             # If a dedicated Emission node was not found, fall back to the Principled BSDF Emission socket.
             name = "Emission"
             type = bpy.types.ShaderNodeBsdfPrincipled
         elif name == "Background":
             type = bpy.types.ShaderNodeBackground
             name = "Color"
+        elif name == "sheenColor":
+            return get_node_socket(blender_material, bpy.types.ShaderNodeBsdfVelvet, "Color")
+        elif name == "sheenRoughness":
+            return get_node_socket(blender_material, bpy.types.ShaderNodeBsdfVelvet, "Sigma")
         else:
-            type = bpy.types.ShaderNodeBsdfPrincipled
-        nodes = [n for n in blender_material.node_tree.nodes if isinstance(n, type) and not n.mute]
-        nodes = [node for node in nodes if check_if_is_linked_to_active_output(node.outputs[0])]
-        inputs = sum([[input for input in node.inputs if input.name == name] for node in nodes], [])
-        if inputs:
-            return inputs[0]
+            if volume is False:
+                type = bpy.types.ShaderNodeBsdfPrincipled
+            else:
+                type = bpy.types.ShaderNodeVolumeAbsorption
+
+        return get_node_socket(blender_material, type, name)
 
     return None
 
@@ -89,11 +105,13 @@ def get_socket_old(blender_material: bpy.types.Material, name: str):
     :param name: the name of the socket
     :return: a blender NodeSocket
     """
-    gltf_node_group_name = get_gltf_node_name().lower()
+    gltf_node_group_names = [get_gltf_node_name().lower(), get_gltf_node_old_name().lower()]
     if blender_material.node_tree and blender_material.use_nodes:
+        # Some weird node groups with missing datablock can have no node_tree, so checking n.node_tree (See #1797)
         nodes = [n for n in blender_material.node_tree.nodes if \
             isinstance(n, bpy.types.ShaderNodeGroup) and \
-            (n.node_tree.name.startswith('glTF Metallic Roughness') or n.node_tree.name.lower() == gltf_node_group_name)]
+            n.node_tree is not None and
+            (n.node_tree.name.startswith('glTF Metallic Roughness') or n.node_tree.name.lower() in gltf_node_group_names)]
         inputs = sum([[input for input in node.inputs if input.name == name] for node in nodes], [])
         if inputs:
             return inputs[0]
@@ -237,17 +255,26 @@ def get_factor_from_socket(socket, kind):
     if node is not None:
         x1, x2 = None, None
         if kind == 'RGB':
-            if node.type == 'MIX_RGB' and node.blend_type == 'MULTIPLY':
+            if node.type == 'MIX' and node.data_type == "RGBA" and node.blend_type == 'MULTIPLY':
                 # TODO: handle factor in inputs[0]?
-                x1 = get_const_from_socket(node.inputs[1], kind)
-                x2 = get_const_from_socket(node.inputs[2], kind)
+                x1 = get_const_from_socket(node.inputs[6], kind)
+                x2 = get_const_from_socket(node.inputs[7], kind)
         if kind == 'VALUE':
             if node.type == 'MATH' and node.operation == 'MULTIPLY':
                 x1 = get_const_from_socket(node.inputs[0], kind)
-                x2 = get_const_from_socket(node.inputs[1], kind)
+                x2 = get_const_from_socket(node.inputs[1], kind)               
         if x1 is not None and x2 is None: return x1
         if x2 is not None and x1 is None: return x2
 
+    return None
+
+def get_const_from_default_value_socket(socket, kind):
+    if kind == 'RGB':
+        if socket.type != 'RGBA': return None
+        return list(socket.default_value)[:3]
+    if kind == 'VALUE':
+        if socket.type != 'VALUE': return None
+        return socket.default_value
     return None
 
 
@@ -291,3 +318,12 @@ def previous_node(socket):
     if prev_socket is not None:
         return prev_socket.node
     return None
+
+#TODOExt is this the same as __get_tex_from_socket from gather_image ?
+def has_image_node_from_socket(socket):
+    result = gltf2_blender_search_node_tree.from_socket(
+        socket,
+        gltf2_blender_search_node_tree.FilterByType(bpy.types.ShaderNodeTexImage))
+    if not result:
+        return False
+    return True

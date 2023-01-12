@@ -14,6 +14,7 @@
 
 import bpy
 from ..com.gltf2_blender_extras import set_extras
+from io_scene_gltf2.io.imp.gltf2_io_user_extensions import import_user_extensions
 
 
 class BlenderCamera():
@@ -22,9 +23,11 @@ class BlenderCamera():
         raise RuntimeError("%s should not be instantiated" % cls)
 
     @staticmethod
-    def create(gltf, camera_id):
+    def create(gltf, vnode, camera_id):
         """Camera creation."""
         pycamera = gltf.data.cameras[camera_id]
+
+        import_user_extensions('gather_import_camera_before_hook', gltf, vnode, pycamera)
 
         if not pycamera.name:
             pycamera.name = "Camera"
@@ -36,7 +39,7 @@ class BlenderCamera():
         if pycamera.type == "orthographic":
             cam.type = "ORTHO"
 
-            # TODO: xmag/ymag
+            cam.ortho_scale = max(pycamera.orthographic.xmag, pycamera.orthographic.ymag) * 2
 
             cam.clip_start = pycamera.orthographic.znear
             cam.clip_end = pycamera.orthographic.zfar
@@ -54,6 +57,5 @@ class BlenderCamera():
             else:
                 # Infinite projection
                 cam.clip_end = 1e12  # some big number
-
 
         return cam

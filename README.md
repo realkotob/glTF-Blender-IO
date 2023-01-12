@@ -8,14 +8,14 @@ Documentation
 
 | Blender Version | Documentation |
 |---------|---------------------|
-| 3.0    | https://docs.blender.org/manual/en/3.0/addons/import_export/scene_gltf2.html  |
+| 3.4    | https://docs.blender.org/manual/en/3.4/addons/import_export/scene_gltf2.html  |
 | dev     | https://docs.blender.org/manual/en/dev/addons/import_export/scene_gltf2.html  |
 
 Notes:
-* 2.80 - 2.93 are previous stable releases.
-* 2.93 is the current Blender LTS release. Check the `blender-v2.93-release` branch.
-* 3.0 is the current stable release. Check the `blender-v3.0-release` branch.
-* master branch of this addon is mirrored in [Blender Addons master](https://developer.blender.org/diffusion/BA/browse/master/io_scene_gltf2/), that will become 3.1.
+* 3.4 is the current stable release. Check the `blender-v3.4-release` branch.
+* 2.80 - 3.3 are previous stable releases.
+* 3.3.2 is the current Blender LTS release. Check the `blender-v3.3-release` branch (and `3.3.2` tag)
+* master branch of this addon is mirrored in [Blender Addons master](https://developer.blender.org/diffusion/BA/browse/master/io_scene_gltf2/), that will become Blender 3.5.
 
 ### Legacy 2.79 Support
 
@@ -80,3 +80,8 @@ To run the tests locally, your system should have a `blender` executable in the 
 The latest version of [Yarn](https://yarnpkg.com/en/) should also be installed.
 
 Then, in the `tests` folder of this repository, run `yarn install`, followed by `yarn run test`.
+
+Some Technical documentation
+----------------------------
+
+Want to fix some bugs or add some enhancement? You will find some technical overview of this addon [here](Technical.md)

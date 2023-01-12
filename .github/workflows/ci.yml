@@ -1,6 +1,8 @@
 name: CI
 
 on:
+  schedule:
+    - cron: '30 13 * * *'
   push:
     branches:
       - master
@@ -9,7 +11,7 @@ on:
 env:
   CI: true
   BLENDER_MAJOR: 3
-  BLENDER_MINOR: 0
+  BLENDER_MINOR: 5
 
 jobs:
   build:
